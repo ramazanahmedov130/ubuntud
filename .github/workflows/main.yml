@@ -1,0 +1,55 @@
+name: Ubuntu Setup with GNOME, RDP, and Tailscale
+
+on:
+  push:
+    branches:
+      - main  # Bu işlem yalnızca 'main' dalına yapılan push'lar için tetiklenecek.
+
+jobs:
+  setup-ubuntu-game:
+    runs-on: ubuntu-latest  # Workflow Ubuntu'nun en son sürümünü kullanacak.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3  # Repo içeriğini çekiyor.
+
+      - name: Update and Install Required Packages
+        run: |
+          sudo apt update
+          sudo apt upgrade -y
+          sudo apt install -y gnome-shell xrdp curl ufw
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up  # Tailscale'i kuruyor ve başlatıyor.
+
+      - name: Start and Enable xrdp service
+        run: |
+          sudo systemctl enable xrdp  # xrdp'yi sürekli çalışacak şekilde yapılandırıyoruz.
+          sudo systemctl start xrdp   # xrdp servisini başlatıyoruz.
+
+      - name: Set up User for RDP (Username: RDP)
+        run: |
+          sudo useradd -m RDP -s /bin/bash  # 'RDP' kullanıcısını oluşturuyoruz.
+          echo 'RDP:password' | sudo chpasswd  # 'RDP' kullanıcısına şifre atıyoruz.
+
+      - name: Install GNOME session
+        run: |
+          sudo apt install -y gnome-session  # GNOME oturum yöneticisini yüklüyoruz.
+
+      - name: Configure firewall to allow RDP
+        run: |
+          sudo ufw allow 3389/tcp  # RDP için 3389 portunu açıyoruz.
+
+      - name: Start GNOME session (Confirm it is available)
+        run: |
+          gnome-shell --version  # GNOME sürümünü kontrol ediyoruz.
+
+      - name: Tailscale Connection Status
+        run: |
+          tailscale status  # Tailscale bağlantı durumunu kontrol ediyoruz.
+
+      - name: RDP Setup and Connection Info
+        run: |
+          echo "RDP is ready to connect. Use Tailscale VPN to access your machine securely."

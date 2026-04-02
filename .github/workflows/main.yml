@@ -1,4 +1,4 @@
-name: Ubuntu RDP and Tailscale Setup with 6h Session
+name: Ubuntu RDP and Tailscale Setup with Xfce and 6h Session
 
 on:
   workflow_dispatch:  # Manuel olarak tetikleme için
@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt upgrade -y
-          sudo apt install -y xrdp gnome-shell curl ufw
+          sudo apt install -y xrdp xfce4 curl ufw  # Xfce ve xrdp'yi kuruyoruz
 
       - name: Install and Configure Tailscale
         run: |
@@ -41,18 +41,14 @@ jobs:
           sudo useradd -m ${{ github.event.inputs.username }} -s /bin/bash  # Kullanıcı adı parametre ile dinamik olacak
           echo "${{ github.event.inputs.username }}:${{ github.event.inputs.password }}" | sudo chpasswd  # Dinamik kullanıcı şifresi
 
-      - name: Install GNOME Desktop Environment
+      - name: Configure Xfce for RDP
         run: |
-          sudo apt install -y gnome-session  # GNOME masaüstü ortamını kuruyoruz
+          # Xfce'yi RDP için yapılandırıyoruz
+          echo "startxfce4" > ~/.xsession
 
       - name: Open RDP Port (3389) in Firewall
         run: |
           sudo ufw allow 3389/tcp  # RDP bağlantısı için gerekli olan portu açıyoruz
-
-      - name: Check GNOME and Tailscale Connection
-        run: |
-          gnome-shell --version  # GNOME'un düzgün yüklendiğini kontrol ediyoruz
-          tailscale status  # Tailscale bağlantı durumunu kontrol ediyoruz
 
       - name: Get Public IP Address
         id: ip

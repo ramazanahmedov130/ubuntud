@@ -1,82 +1,82 @@
-name: Fast Ubuntu RDP Setup with Xfce and Tailscale
+name: Ubuntu RDP (XFCE FIXED)
 
 on:
   workflow_dispatch:
     inputs:
       username:
-        description: 'RDP User Username'
         required: true
-        default: 'RDP'
+        default: RDP
       password:
-        description: 'RDP User Password'
         required: true
-        default: 'password'
+        default: password
 
 jobs:
-  setup-ubuntu-rdp:
+  rdp:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install XRDP and Xfce
+      - name: Install Desktop + XRDP
         run: |
-          sudo apt update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y xrdp xfce4 xfce4-goodies dbus-x11
+          sudo apt update
 
-          # xrdp servisini başlat
+          # Minimal ama sorunsuz XFCE
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+            xfce4 xfce4-goodies xrdp dbus-x11 x11-xserver-utils
+
+          # xrdp başlat
           sudo systemctl enable xrdp
-          sudo systemctl start xrdp
-
-      - name: Install and Configure Tailscale
-        run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up --authkey=${{ secrets.TS_AUTHKEY }} --hostname=github-rdp || true
-
-      - name: Create RDP User
-        run: |
-          USERNAME="${{ github.event.inputs.username }}"
-          PASSWORD="${{ github.event.inputs.password }}"
-
-          sudo useradd -m $USERNAME -s /bin/bash
-          echo "$USERNAME:$PASSWORD" | sudo chpasswd
-          sudo usermod -aG sudo $USERNAME
-
-      - name: Configure Xfce Session (FIX)
-        run: |
-          USERNAME="${{ github.event.inputs.username }}"
-
-          # Kullanıcı için Xfce session ayarı
-          sudo -u $USERNAME bash -c 'echo "startxfce4" > ~/.xsession'
-
-          # xrdp için global ayar
-          echo "startxfce4" | sudo tee /etc/skel/.xsession
-          
-          # xrdp startwm.sh fix
-          sudo sed -i 's/^test -x/#test -x/g' /etc/xrdp/startwm.sh
-          sudo sed -i 's/^exec/#exec/g' /etc/xrdp/startwm.sh
-          echo "startxfce4" | sudo tee -a /etc/xrdp/startwm.sh
-
-          # xrdp restart
           sudo systemctl restart xrdp
 
-      - name: Open Firewall Port
+      - name: Create User
         run: |
-          sudo ufw allow 3389/tcp || true
+          USER=${{ github.event.inputs.username }}
+          PASS=${{ github.event.inputs.password }}
 
-      - name: Get Public IP
+          sudo useradd -m $USER -s /bin/bash
+          echo "$USER:$PASS" | sudo chpasswd
+          sudo usermod -aG sudo $USER
+
+      - name: FIX XFCE SESSION (CRITICAL)
+        run: |
+          USER=${{ github.event.inputs.username }}
+
+          # Kullanıcı session
+          sudo -u $USER bash -c 'echo "xfce4-session" > ~/.xsession'
+          sudo -u $USER chmod +x /home/$USER/.xsession
+
+          # .xsession-errors fix
+          sudo -u $USER touch /home/$USER/.xsession-errors
+
+          # XRDP start fix (EN ÖNEMLİ KISIM)
+          sudo bash -c 'cat > /etc/xrdp/startwm.sh << "EOF"
+#!/bin/sh
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
+exec xfce4-session
+EOF'
+
+          sudo chmod +x /etc/xrdp/startwm.sh
+
+          # PolicyKit fix (failsafe hatasını çözer)
+          sudo mkdir -p /etc/polkit-1/localauthority/50-local.d
+          echo "[Allow All]" | sudo tee /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+          echo "Identity=unix-user:*" | sudo tee -a /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+          echo "Action=org.freedesktop.color-manager.create-device" | sudo tee -a /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+          echo "ResultAny=yes" | sudo tee -a /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+
+          sudo systemctl restart xrdp
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up || true
+
+      - name: Get IP
         run: |
           IP=$(curl -s ifconfig.me)
-          echo "IP: $IP"
-          echo "RDP IP: $IP" >> $GITHUB_STEP_SUMMARY
+          echo "RDP IP: $IP"
+          echo "Username: ${{ github.event.inputs.username }}"
+          echo "Password: ${{ github.event.inputs.password }}"
 
-      - name: Keep Session Alive (6 Hours)
-        run: |
-          echo "RDP aktif (6 saat)"
-          sleep 21600
-
-      - name: Shutdown
-        run: |
-          sudo systemctl stop xrdp
-          echo "RDP kapatıldı"
+      - name: Keep Alive (6h)
+        run: sleep 21600

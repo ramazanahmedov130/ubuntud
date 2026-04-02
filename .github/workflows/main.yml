@@ -1,55 +1,60 @@
-name: Ubuntu Setup with GNOME, RDP, and Tailscale
+name: Ubuntu RDP and Tailscale Setup
 
+# Workflow'u manuel olarak tetiklemek için `workflow_dispatch` kullanıyoruz
 on:
-  push:
-    branches:
-      - main  # Bu işlem yalnızca 'main' dalına yapılan push'lar için tetiklenecek.
+  workflow_dispatch:  # Bu, manuel tetiklemeyi sağlıyor
+    inputs:
+      username:
+        description: 'RDP User Username'  # Kullanıcı adı girişi
+        required: true
+        default: 'RDP'
+      password:
+        description: 'RDP User Password'  # Kullanıcı şifresi girişi
+        required: true
+        default: 'password'
 
 jobs:
-  setup-ubuntu-game:
-    runs-on: ubuntu-latest  # Workflow Ubuntu'nun en son sürümünü kullanacak.
+  setup-ubuntu-rdp:
+    runs-on: ubuntu-latest  # Workflow, Ubuntu'nun en son sürümünde çalışacak
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Repo içeriğini çekiyor.
+        uses: actions/checkout@v3  # Repo içeriğini çekiyoruz
 
       - name: Update and Install Required Packages
         run: |
           sudo apt update
           sudo apt upgrade -y
-          sudo apt install -y gnome-shell xrdp curl ufw
+          sudo apt install -y xrdp gnome-shell curl ufw
 
-      - name: Install Tailscale
+      - name: Install and Configure Tailscale
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up  # Tailscale'i kuruyor ve başlatıyor.
+          curl -fsSL https://tailscale.com/install.sh | sh  # Tailscale kurulumunu yapıyoruz
+          sudo tailscale up  # Tailscale'i başlatıyoruz
 
-      - name: Start and Enable xrdp service
+      - name: Start and Enable xrdp Service
         run: |
-          sudo systemctl enable xrdp  # xrdp'yi sürekli çalışacak şekilde yapılandırıyoruz.
-          sudo systemctl start xrdp   # xrdp servisini başlatıyoruz.
+          sudo systemctl enable xrdp  # xrdp servisini sürekli çalışacak şekilde ayarlıyoruz
+          sudo systemctl start xrdp   # xrdp'yi başlatıyoruz
 
-      - name: Set up User for RDP (Username: RDP)
+      - name: Set up RDP User (Dynamic Username)
         run: |
-          sudo useradd -m RDP -s /bin/bash  # 'RDP' kullanıcısını oluşturuyoruz.
-          echo 'RDP:password' | sudo chpasswd  # 'RDP' kullanıcısına şifre atıyoruz.
+          sudo useradd -m ${{ github.event.inputs.username }} -s /bin/bash  # Kullanıcı adı parametre ile dinamik olacak
+          echo "${{ github.event.inputs.username }}:${{ github.event.inputs.password }}" | sudo chpasswd  # Dinamik kullanıcı şifresi
 
-      - name: Install GNOME session
+      - name: Install GNOME Desktop Environment
         run: |
-          sudo apt install -y gnome-session  # GNOME oturum yöneticisini yüklüyoruz.
+          sudo apt install -y gnome-session  # GNOME masaüstü ortamını kuruyoruz
 
-      - name: Configure firewall to allow RDP
+      - name: Open RDP Port (3389) in Firewall
         run: |
-          sudo ufw allow 3389/tcp  # RDP için 3389 portunu açıyoruz.
+          sudo ufw allow 3389/tcp  # RDP bağlantısı için gerekli olan portu açıyoruz
 
-      - name: Start GNOME session (Confirm it is available)
+      - name: Check GNOME and Tailscale Connection
         run: |
-          gnome-shell --version  # GNOME sürümünü kontrol ediyoruz.
+          gnome-shell --version  # GNOME'un düzgün yüklendiğini kontrol ediyoruz
+          tailscale status  # Tailscale bağlantı durumunu kontrol ediyoruz
 
-      - name: Tailscale Connection Status
+      - name: Final RDP Connection Info
         run: |
-          tailscale status  # Tailscale bağlantı durumunu kontrol ediyoruz.
-
-      - name: RDP Setup and Connection Info
-        run: |
-          echo "RDP is ready to connect. Use Tailscale VPN to access your machine securely."
+          echo "RDP setup completed. You can connect via RDP using Tailscale VPN."

@@ -1,7 +1,7 @@
-name: Ubuntu RDP and Tailscale Setup with Xfce and 6h Session
+name: Fast Ubuntu RDP Setup with Xfce and Tailscale
 
 on:
-  workflow_dispatch:  # Manuel olarak tetikleme için
+  workflow_dispatch:
     inputs:
       username:
         description: 'RDP User Username'
@@ -14,27 +14,21 @@ on:
 
 jobs:
   setup-ubuntu-rdp:
-    runs-on: ubuntu-latest  # Workflow, Ubuntu'nun en son sürümünde çalışacak
+    runs-on: ubuntu-latest  # Ubuntu'nun en son sürümünde çalışacak
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Kodları çekiyoruz
+        uses: actions/checkout@v3  # Repo içeriğini çekiyoruz
 
-      - name: Update and Install Required Packages
+      - name: Install XRDP and Xfce only
         run: |
-          sudo apt update
-          sudo apt upgrade -y
-          sudo apt install -y xrdp xfce4 curl ufw  # Xfce ve xrdp'yi kuruyoruz
+          sudo apt update -y  # Paket listelerini hızlıca güncelle
+          sudo apt install -y xrdp xfce4 curl ufw  # Sadece gerekli paketler
 
       - name: Install and Configure Tailscale
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh  # Tailscale kurulumunu yapıyoruz
+          curl -fsSL https://tailscale.com/install.sh | sh  # Tailscale kurulumunu hızlı yapıyoruz
           sudo tailscale up  # Tailscale'i başlatıyoruz
-
-      - name: Start and Enable xrdp Service
-        run: |
-          sudo systemctl enable xrdp  # xrdp servisini sürekli çalışacak şekilde ayarlıyoruz
-          sudo systemctl start xrdp   # xrdp'yi başlatıyoruz
 
       - name: Set up RDP User (Dynamic Username)
         run: |

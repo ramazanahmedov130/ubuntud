@@ -14,56 +14,69 @@ on:
 
 jobs:
   setup-ubuntu-rdp:
-    runs-on: ubuntu-latest  # Ubuntu'nun en son sürümünde çalışacak
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Repo içeriğini çekiyoruz
+        uses: actions/checkout@v3
 
-      - name: Install XRDP and Xfce only
+      - name: Install XRDP and Xfce
         run: |
-          sudo apt update -y  # Paket listelerini hızlıca güncelle
-          sudo apt install -y xrdp xfce4 curl ufw  # Sadece gerekli paketler
+          sudo apt update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y xrdp xfce4 xfce4-goodies dbus-x11
+
+          # xrdp servisini başlat
+          sudo systemctl enable xrdp
+          sudo systemctl start xrdp
 
       - name: Install and Configure Tailscale
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh  # Tailscale kurulumunu hızlı yapıyoruz
-          sudo tailscale up  # Tailscale'i başlatıyoruz
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey=${{ secrets.TS_AUTHKEY }} --hostname=github-rdp || true
 
-      - name: Set up RDP User (Dynamic Username)
+      - name: Create RDP User
         run: |
-          sudo useradd -m ${{ github.event.inputs.username }} -s /bin/bash  # Kullanıcı adı parametre ile dinamik olacak
-          echo "${{ github.event.inputs.username }}:${{ github.event.inputs.password }}" | sudo chpasswd  # Dinamik kullanıcı şifresi
+          USERNAME="${{ github.event.inputs.username }}"
+          PASSWORD="${{ github.event.inputs.password }}"
 
-      - name: Configure Xfce for RDP
-        run: |
-          # Xfce'yi RDP için yapılandırıyoruz
-          echo "startxfce4" > ~/.xsession
+          sudo useradd -m $USERNAME -s /bin/bash
+          echo "$USERNAME:$PASSWORD" | sudo chpasswd
+          sudo usermod -aG sudo $USERNAME
 
-      - name: Open RDP Port (3389) in Firewall
+      - name: Configure Xfce Session (FIX)
         run: |
-          sudo ufw allow 3389/tcp  # RDP bağlantısı için gerekli olan portu açıyoruz
+          USERNAME="${{ github.event.inputs.username }}"
 
-      - name: Get Public IP Address
-        id: ip
-        run: |
-          # Sunucunun public IP adresini alıyoruz
-          IP_ADDRESS=$(curl -s http://checkip.amazonaws.com)
-          echo "Public IP Address: $IP_ADDRESS"
-          echo "ip=$IP_ADDRESS" >> $GITHUB_ENV  # IP'yi environment variable olarak ayarlıyoruz
+          # Kullanıcı için Xfce session ayarı
+          sudo -u $USERNAME bash -c 'echo "startxfce4" > ~/.xsession'
 
-      - name: Wait for 6 hours
-        run: |
-          echo "RDP session will last for 6 hours."
-          sleep 21600  # 6 saatlik bekleme (6 * 60 * 60 = 21600 saniye)
+          # xrdp için global ayar
+          echo "startxfce4" | sudo tee /etc/skel/.xsession
+          
+          # xrdp startwm.sh fix
+          sudo sed -i 's/^test -x/#test -x/g' /etc/xrdp/startwm.sh
+          sudo sed -i 's/^exec/#exec/g' /etc/xrdp/startwm.sh
+          echo "startxfce4" | sudo tee -a /etc/xrdp/startwm.sh
 
-      - name: Final RDP Connection Info
-        run: |
-          echo "Your RDP session is active for 6 hours."
-          echo "Connect using Tailscale VPN at IP: ${{ env.ip }} with username: ${{ github.event.inputs.username }}"
+          # xrdp restart
+          sudo systemctl restart xrdp
 
-      - name: Shutdown RDP and Cleanup
+      - name: Open Firewall Port
         run: |
-          # 6 saat sonra RDP'yi sonlandırıp sistemi kapatıyoruz
-          sudo systemctl stop xrdp  # xrdp'yi durduruyoruz
-          echo "RDP session has been closed."
+          sudo ufw allow 3389/tcp || true
+
+      - name: Get Public IP
+        run: |
+          IP=$(curl -s ifconfig.me)
+          echo "IP: $IP"
+          echo "RDP IP: $IP" >> $GITHUB_STEP_SUMMARY
+
+      - name: Keep Session Alive (6 Hours)
+        run: |
+          echo "RDP aktif (6 saat)"
+          sleep 21600
+
+      - name: Shutdown
+        run: |
+          sudo systemctl stop xrdp
+          echo "RDP kapatıldı"

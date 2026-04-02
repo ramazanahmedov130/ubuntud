@@ -1,15 +1,14 @@
-name: Ubuntu RDP and Tailscale Setup
+name: Ubuntu RDP and Tailscale Setup with 6h Session
 
-# Workflow'u manuel olarak tetiklemek için `workflow_dispatch` kullanıyoruz
 on:
-  workflow_dispatch:  # Bu, manuel tetiklemeyi sağlıyor
+  workflow_dispatch:  # Manuel olarak tetikleme için
     inputs:
       username:
-        description: 'RDP User Username'  # Kullanıcı adı girişi
+        description: 'RDP User Username'
         required: true
         default: 'RDP'
       password:
-        description: 'RDP User Password'  # Kullanıcı şifresi girişi
+        description: 'RDP User Password'
         required: true
         default: 'password'
 
@@ -19,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Repo içeriğini çekiyoruz
+        uses: actions/checkout@v3  # Kodları çekiyoruz
 
       - name: Update and Install Required Packages
         run: |
@@ -55,6 +54,26 @@ jobs:
           gnome-shell --version  # GNOME'un düzgün yüklendiğini kontrol ediyoruz
           tailscale status  # Tailscale bağlantı durumunu kontrol ediyoruz
 
+      - name: Get Public IP Address
+        id: ip
+        run: |
+          # Sunucunun public IP adresini alıyoruz
+          IP_ADDRESS=$(curl -s http://checkip.amazonaws.com)
+          echo "Public IP Address: $IP_ADDRESS"
+          echo "ip=$IP_ADDRESS" >> $GITHUB_ENV  # IP'yi environment variable olarak ayarlıyoruz
+
+      - name: Wait for 6 hours
+        run: |
+          echo "RDP session will last for 6 hours."
+          sleep 21600  # 6 saatlik bekleme (6 * 60 * 60 = 21600 saniye)
+
       - name: Final RDP Connection Info
         run: |
-          echo "RDP setup completed. You can connect via RDP using Tailscale VPN."
+          echo "Your RDP session is active for 6 hours."
+          echo "Connect using Tailscale VPN at IP: ${{ env.ip }} with username: ${{ github.event.inputs.username }}"
+
+      - name: Shutdown RDP and Cleanup
+        run: |
+          # 6 saat sonra RDP'yi sonlandırıp sistemi kapatıyoruz
+          sudo systemctl stop xrdp  # xrdp'yi durduruyoruz
+          echo "RDP session has been closed."

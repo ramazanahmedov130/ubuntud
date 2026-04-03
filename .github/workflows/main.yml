@@ -1,4 +1,4 @@
-name: Windows 10 RDP via Tailscale (Stable & Low CPU)
+name: Windows 10 RDP via Tailscale (Final Stable Version)
 
 on:
   workflow_dispatch:
@@ -22,13 +22,22 @@ jobs:
         shell: powershell
         run: |
           $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
+
+          # Start Tailscale service
+          if (-not (Get-Service -Name Tailscale -ErrorAction SilentlyContinue)) {
+              throw "Tailscale service not found"
+          }
           Start-Service Tailscale
+
+          # Bring Tailscale up
           & $tailscalePath up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
 
       - name: Enable RDP
         shell: powershell
         run: |
+          # Enable Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\' -Name "fDenyTSConnections" -Value 0
+          # Enable firewall rules
           Get-NetFirewallRule -DisplayGroup "Remote Desktop" | Set-NetFirewallRule -Enabled True
 
       - name: Ensure runner user
@@ -56,6 +65,7 @@ jobs:
           $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
           Write-Host "Runner active. Minimal CPU keep-alive..."
           while ($true) {
+              # Check Tailscale status to keep connection alive
               & $tailscalePath status > $null
               Start-Sleep -Seconds 60
           }

@@ -13,21 +13,22 @@ jobs:
         shell: powershell
         run: |
           choco install tailscale -y
-          # Chocolatey path auto-update, refreshenv lazım deyil
+          # Tailscale quraşdırıldığı path
+          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
+          if (-not (Test-Path $tailscalePath)) { throw "Tailscale not found at $tailscalePath" }
+          Write-Host "Tailscale installed at $tailscalePath"
 
       - name: Start Tailscale
         shell: powershell
         run: |
-          # Tailscale servisi adı "Tailscale"
+          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
           Start-Service Tailscale
-          tailscale up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
+          & $tailscalePath up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
 
       - name: Enable RDP
         shell: powershell
         run: |
-          # Enable Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\' -Name "fDenyTSConnections" -Value 0
-          # Enable firewall rules
           Get-NetFirewallRule -DisplayGroup "Remote Desktop" | Set-NetFirewallRule -Enabled True
 
       - name: Ensure runner user
@@ -41,7 +42,8 @@ jobs:
       - name: Show RDP connection info
         shell: powershell
         run: |
-          $ip = tailscale ip -4
+          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
+          $ip = & $tailscalePath ip -4
           Write-Host "`n==== RDP Connection Info ===="
           Write-Host "IP: $ip"
           Write-Host "Username: runner"
@@ -51,8 +53,9 @@ jobs:
       - name: Minimal Keep Alive (Low CPU)
         shell: powershell
         run: |
+          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
           Write-Host "Runner active. Minimal CPU keep-alive..."
           while ($true) {
-              tailscale status > $null
+              & $tailscalePath status > $null
               Start-Sleep -Seconds 60
           }

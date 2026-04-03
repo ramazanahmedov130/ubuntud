@@ -1,53 +1,42 @@
-name: Ubuntu XFCE4 RDP (Stable)
+name: Windows 10 RDP via Tailscale
 
 on:
   workflow_dispatch:
 
 jobs:
-  rdp:
-    runs-on: ubuntu-latest
+  windows:
+    runs-on: windows-2022   # Windows 10 virtual yoxdur, amma Windows Server 2022 əsaslı, RDP ilə eyni qaydada işləyir
+    timeout-minutes: 360
 
     steps:
-      - name: Update system
-        run: sudo apt update
-
-      - name: Install desktop + RDP
-        run: |
-          sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11 sudo
-
-      - name: Fix XFCE session (NO BLACK SCREEN)
-        run: |
-          echo "startxfce4" > ~/.xsession
-          chmod +x ~/.xsession
-
-      - name: Configure XRDP properly
-        run: |
-          sudo adduser xrdp ssl-cert
-          sudo systemctl enable xrdp
-          sudo systemctl restart xrdp
-
-      - name: Set password
-        run: |
-          echo "runner:123456" | sudo chpasswd
-
       - name: Install Tailscale
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
+          choco install tailscale -y
 
-      - name: Start Tailscale (FIXED)
+      - name: Start Tailscale
         run: |
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --accept-dns=false
+          net start TailscaleService
+          tailscale up --authkey=%TAILSCALE_AUTH_KEY% --hostname windows-runner
 
-      - name: Show connection info
+      - name: Enable RDP
         run: |
-          echo "=============================="
-          echo "RDP READY"
-          echo "IP:"
-          tailscale ip -4
-          echo "PORT: 3389"
-          echo "USER: runner"
-          echo "PASS: 123456"
-          echo "=============================="
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Keep alive
-        run: sleep 21600
+      - name: Set runner password
+        run: |
+          net user runner 123456 /add
+          net localgroup administrators runner /add
+
+      - name: Show RDP connection info
+        run: |
+          $ip = tailscale ip -4
+          Write-Host "Connect via RDP:"
+          Write-Host "IP: $ip"
+          Write-Host "Username: runner"
+          Write-Host "Password: 123456"
+
+      - name: Keep Alive
+        run: |
+          Write-Host "Runner active. Keep alive loop..."
+          while ($true) { Start-Sleep -Seconds 30 }

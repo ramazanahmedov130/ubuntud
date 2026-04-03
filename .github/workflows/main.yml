@@ -1,4 +1,4 @@
-name: Windows 10 RDP via Tailscale (Final Stable Version)
+name: Windows 10 RDP via Tailscale (Final Working Version)
 
 on:
   workflow_dispatch:
@@ -13,16 +13,17 @@ jobs:
         shell: powershell
         run: |
           choco install tailscale -y
-          # Tailscale quraşdırıldığı path
-          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
-          if (-not (Test-Path $tailscalePath)) { throw "Tailscale not found at $tailscalePath" }
-          Write-Host "Tailscale installed at $tailscalePath"
+
+          # Chocolatey PATH update for current session
+          $tailscaleFolder = "$env:ProgramFiles\Tailscale IPN"
+          if (-not ($env:PATH -split ";" | Where-Object { $_ -eq $tailscaleFolder })) {
+              $env:PATH += ";$tailscaleFolder"
+          }
+          Write-Host "Updated PATH: $env:PATH"
 
       - name: Start Tailscale
         shell: powershell
         run: |
-          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
-
           # Start Tailscale service
           if (-not (Get-Service -Name Tailscale -ErrorAction SilentlyContinue)) {
               throw "Tailscale service not found"
@@ -30,14 +31,12 @@ jobs:
           Start-Service Tailscale
 
           # Bring Tailscale up
-          & $tailscalePath up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
+          tailscale up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
 
       - name: Enable RDP
         shell: powershell
         run: |
-          # Enable Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\' -Name "fDenyTSConnections" -Value 0
-          # Enable firewall rules
           Get-NetFirewallRule -DisplayGroup "Remote Desktop" | Set-NetFirewallRule -Enabled True
 
       - name: Ensure runner user
@@ -51,8 +50,7 @@ jobs:
       - name: Show RDP connection info
         shell: powershell
         run: |
-          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
-          $ip = & $tailscalePath ip -4
+          $ip = tailscale ip -4
           Write-Host "`n==== RDP Connection Info ===="
           Write-Host "IP: $ip"
           Write-Host "Username: runner"
@@ -62,10 +60,8 @@ jobs:
       - name: Minimal Keep Alive (Low CPU)
         shell: powershell
         run: |
-          $tailscalePath = "C:\Program Files\Tailscale IPN\tailscale.exe"
           Write-Host "Runner active. Minimal CPU keep-alive..."
           while ($true) {
-              # Check Tailscale status to keep connection alive
-              & $tailscalePath status > $null
+              tailscale status > $null
               Start-Sleep -Seconds 60
           }

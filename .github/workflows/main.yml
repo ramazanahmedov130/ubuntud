@@ -1,4 +1,4 @@
-name: Ubuntu XFCE4 RDP
+name: Ubuntu XFCE4 RDP (Stable)
 
 on:
   workflow_dispatch:
@@ -11,20 +11,22 @@ jobs:
       - name: Update system
         run: sudo apt update
 
-      - name: Install XFCE4 + RDP
+      - name: Install desktop + RDP
         run: |
-          sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11
+          sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11 sudo
 
-      - name: Configure XFCE for RDP
+      - name: Fix XFCE session (NO BLACK SCREEN)
         run: |
-          echo xfce4-session > ~/.xsession
+          echo "startxfce4" > ~/.xsession
+          chmod +x ~/.xsession
 
-      - name: Start XRDP
+      - name: Configure XRDP properly
         run: |
+          sudo adduser xrdp ssl-cert
           sudo systemctl enable xrdp
-          sudo systemctl start xrdp
+          sudo systemctl restart xrdp
 
-      - name: Set user password
+      - name: Set password
         run: |
           echo "runner:123456" | sudo chpasswd
 
@@ -32,18 +34,20 @@ jobs:
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
 
-      - name: Start Tailscale
+      - name: Start Tailscale (FIXED)
         run: |
-          sudo tailscale up --authkey ${{ secrets.TS_AUTHKEY }} --hostname github-rdp
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --accept-dns=false
 
       - name: Show connection info
         run: |
-          echo "Tailscale IP:"
+          echo "=============================="
+          echo "RDP READY"
+          echo "IP:"
           tailscale ip -4
-          echo "RDP Port: 3389"
-          echo "Username: runner"
-          echo "Password: 123456"
+          echo "PORT: 3389"
+          echo "USER: runner"
+          echo "PASS: 123456"
+          echo "=============================="
 
       - name: Keep alive
-        run: |
-          sleep 21600
+        run: sleep 21600

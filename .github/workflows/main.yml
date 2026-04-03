@@ -1,4 +1,4 @@
-name: Windows 10 RDP via Tailscale (Optimized)
+name: Windows 10 RDP via Tailscale (Stable & Low CPU)
 
 on:
   workflow_dispatch:
@@ -13,25 +13,27 @@ jobs:
         shell: powershell
         run: |
           choco install tailscale -y
-          # PowerShell üçün refreshenv əvəzi
-          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+          # Chocolatey path auto-update, refreshenv lazım deyil
 
       - name: Start Tailscale
         shell: powershell
         run: |
-          Start-Service TailscaleService
+          # Tailscale servisi adı "Tailscale"
+          Start-Service Tailscale
           tailscale up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
 
       - name: Enable RDP
         shell: powershell
         run: |
+          # Enable Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\' -Name "fDenyTSConnections" -Value 0
+          # Enable firewall rules
           Get-NetFirewallRule -DisplayGroup "Remote Desktop" | Set-NetFirewallRule -Enabled True
 
       - name: Ensure runner user
         shell: powershell
         run: |
-          if (-Not (Get-LocalUser -Name "runner" -ErrorAction SilentlyContinue)) {
+          if (-not (Get-LocalUser -Name "runner" -ErrorAction SilentlyContinue)) {
               net user runner 123456 /add
               net localgroup administrators runner /add
           }
@@ -46,10 +48,10 @@ jobs:
           Write-Host "Password: 123456"
           Write-Host "==============================`n"
 
-      - name: Minimal Keep Alive
+      - name: Minimal Keep Alive (Low CPU)
         shell: powershell
         run: |
-          Write-Host "Runner active. Minimal CPU usage keep-alive..."
+          Write-Host "Runner active. Minimal CPU keep-alive..."
           while ($true) {
               tailscale status > $null
               Start-Sleep -Seconds 60

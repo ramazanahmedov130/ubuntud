@@ -1,82 +1,49 @@
-name: Ubuntu RDP (XFCE FIXED)
+name: Ubuntu XFCE4 RDP
 
 on:
   workflow_dispatch:
-    inputs:
-      username:
-        required: true
-        default: RDP
-      password:
-        required: true
-        default: password
 
 jobs:
   rdp:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Desktop + XRDP
+      - name: Update system
+        run: sudo apt update
+
+      - name: Install XFCE4 + RDP
         run: |
-          sudo apt update
+          sudo apt install -y xfce4 xfce4-goodies xrdp dbus-x11
 
-          # Minimal ama sorunsuz XFCE
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y \
-            xfce4 xfce4-goodies xrdp dbus-x11 x11-xserver-utils
+      - name: Configure XFCE for RDP
+        run: |
+          echo xfce4-session > ~/.xsession
 
-          # xrdp başlat
+      - name: Start XRDP
+        run: |
           sudo systemctl enable xrdp
-          sudo systemctl restart xrdp
+          sudo systemctl start xrdp
 
-      - name: Create User
+      - name: Set user password
         run: |
-          USER=${{ github.event.inputs.username }}
-          PASS=${{ github.event.inputs.password }}
-
-          sudo useradd -m $USER -s /bin/bash
-          echo "$USER:$PASS" | sudo chpasswd
-          sudo usermod -aG sudo $USER
-
-      - name: FIX XFCE SESSION (CRITICAL)
-        run: |
-          USER=${{ github.event.inputs.username }}
-
-          # Kullanıcı session
-          sudo -u $USER bash -c 'echo "xfce4-session" > ~/.xsession'
-          sudo -u $USER chmod +x /home/$USER/.xsession
-
-          # .xsession-errors fix
-          sudo -u $USER touch /home/$USER/.xsession-errors
-
-          # XRDP start fix (EN ÖNEMLİ KISIM)
-          sudo bash -c 'cat > /etc/xrdp/startwm.sh << "EOF"
-#!/bin/sh
-unset DBUS_SESSION_BUS_ADDRESS
-unset XDG_RUNTIME_DIR
-exec xfce4-session
-EOF'
-
-          sudo chmod +x /etc/xrdp/startwm.sh
-
-          # PolicyKit fix (failsafe hatasını çözer)
-          sudo mkdir -p /etc/polkit-1/localauthority/50-local.d
-          echo "[Allow All]" | sudo tee /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
-          echo "Identity=unix-user:*" | sudo tee -a /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
-          echo "Action=org.freedesktop.color-manager.create-device" | sudo tee -a /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
-          echo "ResultAny=yes" | sudo tee -a /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
-
-          sudo systemctl restart xrdp
+          echo "runner:123456" | sudo chpasswd
 
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up || true
 
-      - name: Get IP
+      - name: Start Tailscale
         run: |
-          IP=$(curl -s ifconfig.me)
-          echo "RDP IP: $IP"
-          echo "Username: ${{ github.event.inputs.username }}"
-          echo "Password: ${{ github.event.inputs.password }}"
+          sudo tailscale up --authkey ${{ secrets.TS_AUTHKEY }} --hostname github-rdp
 
-      - name: Keep Alive (6h)
-        run: sleep 21600
+      - name: Show connection info
+        run: |
+          echo "Tailscale IP:"
+          tailscale ip -4
+          echo "RDP Port: 3389"
+          echo "Username: runner"
+          echo "Password: 123456"
+
+      - name: Keep alive
+        run: |
+          sleep 21600

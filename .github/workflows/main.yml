@@ -10,9 +10,11 @@ jobs:
 
     steps:
       - name: Install Tailscale
+        shell: powershell
         run: |
           choco install tailscale -y
-          refreshenv
+          # PowerShell üçün refreshenv əvəzi
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
 
       - name: Start Tailscale
         shell: powershell
@@ -47,10 +49,8 @@ jobs:
       - name: Minimal Keep Alive
         shell: powershell
         run: |
-          # Headless, low CPU loop
           Write-Host "Runner active. Minimal CPU usage keep-alive..."
           while ($true) {
-              # Only ping Tailscale network to keep connection alive
               tailscale status > $null
               Start-Sleep -Seconds 60
           }

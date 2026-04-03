@@ -1,42 +1,56 @@
-name: Windows 10 RDP via Tailscale
+name: Windows 10 RDP via Tailscale (Optimized)
 
 on:
   workflow_dispatch:
 
 jobs:
   windows:
-    runs-on: windows-2022   # Windows 10 virtual yoxdur, amma Windows Server 2022 əsaslı, RDP ilə eyni qaydada işləyir
+    runs-on: windows-2022
     timeout-minutes: 360
 
     steps:
       - name: Install Tailscale
         run: |
           choco install tailscale -y
+          refreshenv
 
       - name: Start Tailscale
+        shell: powershell
         run: |
-          net start TailscaleService
-          tailscale up --authkey=%TAILSCALE_AUTH_KEY% --hostname windows-runner
+          Start-Service TailscaleService
+          tailscale up --authkey=$env:TAILSCALE_AUTH_KEY --hostname windows-runner
 
       - name: Enable RDP
+        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Get-NetFirewallRule -DisplayGroup "Remote Desktop" | Set-NetFirewallRule -Enabled True
 
-      - name: Set runner password
+      - name: Ensure runner user
+        shell: powershell
         run: |
-          net user runner 123456 /add
-          net localgroup administrators runner /add
+          if (-Not (Get-LocalUser -Name "runner" -ErrorAction SilentlyContinue)) {
+              net user runner 123456 /add
+              net localgroup administrators runner /add
+          }
 
       - name: Show RDP connection info
+        shell: powershell
         run: |
           $ip = tailscale ip -4
-          Write-Host "Connect via RDP:"
+          Write-Host "`n==== RDP Connection Info ===="
           Write-Host "IP: $ip"
           Write-Host "Username: runner"
           Write-Host "Password: 123456"
+          Write-Host "==============================`n"
 
-      - name: Keep Alive
+      - name: Minimal Keep Alive
+        shell: powershell
         run: |
-          Write-Host "Runner active. Keep alive loop..."
-          while ($true) { Start-Sleep -Seconds 30 }
+          # Headless, low CPU loop
+          Write-Host "Runner active. Minimal CPU usage keep-alive..."
+          while ($true) {
+              # Only ping Tailscale network to keep connection alive
+              tailscale status > $null
+              Start-Sleep -Seconds 60
+          }
